@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>小朋友下樓梯</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width:100%; height:100%;
+  background:#0d0520;
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  font-family:'Press Start 2P', monospace;
+  overflow:hidden; touch-action:none;
+  user-select:none; -webkit-user-select:none;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(40,80,200,0.18) 0%, transparent 60%);
+}
+
+#game-wrapper {
+  display:flex; flex-direction:column; align-items:center;
+  width:100%; height:100%;
+}
+
+#title {
+  color:#ffee00; font-size:clamp(8px,3vw,14px);
+  text-shadow:2px 2px 0 #ff6600, 4px 4px 0 rgba(0,0,0,0.4);
+  letter-spacing:1px; padding:6px 0 3px;
+  animation:titlePulse 2s ease-in-out infinite; flex-shrink:0;
+}
+@keyframes titlePulse { 0%,100%{opacity:1} 50%{opacity:0.75} }
+
+#hud {
+  display:flex; justify-content:space-between; align-items:center;
+  width:100%; max-width:420px; padding:4px 10px;
+  background:rgba(0,0,0,0.75); border-bottom:2px solid #333;
+  color:#fff; font-size:clamp(5px,2vw,8px); gap:8px; flex-shrink:0;
+}
+.hud-block { display:flex; flex-direction:column; gap:2px; }
+.hud-label { color:#888; font-size:clamp(4px,1.5vw,6px); }
+.hud-value { color:#ffee00; font-size:clamp(6px,2.5vw,10px); }
+.hud-value.red { color:#ff4444; }
+#hearts { display:flex; gap:3px; align-items:center; }
+.heart { font-size:clamp(10px,3.5vw,16px); transition:opacity .2s; }
+.heart.empty { opacity:0.2; filter:grayscale(1); }
+
+/* ── Canvas area ── */
+#canvas-area {
+  position:relative; flex:1; width:100%; max-width:420px;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#canvas-container {
+  position:relative; flex:1;
+  border-left:3px solid #ffee00; border-right:3px solid #ffee00;
+  box-shadow:0 0 25px rgba(255,238,0,0.25), 0 0 50px rgba(255,102,0,0.1);
+  overflow:hidden;
+}
+canvas {
+  display:block; width:100%; height:100%;
+  image-rendering:pixelated; image-rendering:crisp-edges;
+}
+#scanlines {
+  position:absolute; inset:0; pointer-events:none; z-index:5;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+}
+
+/* ── Touch controls ── */
+#touch-controls {
+  display:none;
+  width:100%; max-width:420px;
+  padding:8px 16px 12px;
+  justify-content:space-between; align-items:center;
+  background:rgba(0,0,0,0.6); border-top:2px solid #222;
+  flex-shrink:0; gap:12px;
+}
+.touch-btn {
+  width:clamp(56px,18vw,80px); height:clamp(48px,14vw,64px);
+  background:rgba(255,238,0,0.12); border:2px solid rgba(255,238,0,0.4);
+  border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-size:clamp(18px,7vw,32px); cursor:pointer; flex-shrink:0;
+  transition:background .1s;
+  box-shadow:0 3px 0 rgba(255,102,0,0.3);
+  -webkit-tap-highlight-color:transparent;
+}
+.touch-btn:active, .touch-btn.pressed {
+  background:rgba(255,238,0,0.35);
+  transform:translateY(2px); box-shadow:none;
+}
+#touch-info { font-size:clamp(5px,1.8vw,7px); color:#555; text-align:center; line-height:1.8; }
+
+/* ── Overlay ── */
+#overlay {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(8,3,18,0.92); color:#fff; gap:12px; z-index:10; padding:16px;
+}
+.overlay-title {
+  font-size:clamp(12px,5vw,20px); color:#ffee00;
+  text-shadow:3px 3px 0 #ff6600;
+}
+.overlay-title.blink { animation:blink 1s step-end infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+.score-line { font-size:clamp(7px,2.5vw,10px); color:#aaffaa; line-height:2; text-align:center; }
+.best-line  { font-size:clamp(7px,2.5vw,10px); color:#ffcc44; text-align:center; }
+
+/* name input */
+#name-section {
+  display:flex; flex-direction:column; align-items:center; gap:8px; width:100%;
+}
+#name-label { font-size:clamp(6px,2vw,8px); color:#aaa; }
+#name-input {
+  font-family:'Press Start 2P', monospace;
+  font-size:clamp(8px,3vw,12px); padding:8px 12px;
+  background:#1a1040; border:2px solid #ffee00; color:#ffee00;
+  width:min(200px, 80%); text-align:center; outline:none;
+  box-shadow:3px 3px 0 #ff6600;
+}
+#name-input::placeholder { color:#444; }
+
+.pixel-btn {
+  font-family:'Press Start 2P', monospace;
+  font-size:clamp(8px,3vw,11px); padding:10px 18px;
+  background:#ffee00; color:#0d0520; border:none; cursor:pointer;
+  box-shadow:4px 4px 0 #ff6600; transition:transform .05s, box-shadow .05s;
+  white-space:nowrap;
+}
+.pixel-btn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #ff6600; }
+.pixel-btn.secondary {
+  background:#334; color:#aaa; box-shadow:4px 4px 0 #111;
+  font-size:clamp(6px,2vw,8px);
+}
+
+/* leaderboard */
+#leaderboard-section {
+  width:100%; max-width:280px;
+  display:flex; flex-direction:column; gap:6px;
+}
+#lb-title { font-size:clamp(7px,2.5vw,9px); color:#ffcc44; text-align:center; }
+#lb-list {
+  display:flex; flex-direction:column; gap:3px;
+  max-height:140px; overflow-y:auto;
+}
+.lb-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:3px 8px; background:rgba(255,255,255,0.05);
+  font-size:clamp(5px,1.8vw,7px); gap:6px;
+}
+.lb-row.gold   { background:rgba(255,215,0,0.12); color:#ffd700; }
+.lb-row.silver { background:rgba(192,192,192,0.1); color:#c0c0c0; }
+.lb-row.bronze { background:rgba(205,127,50,0.1);  color:#cd7f32; }
+.lb-row.me     { background:rgba(100,255,150,0.1); color:#aaffaa; }
+.lb-rank { flex-shrink:0; width:16px; text-align:center; }
+.lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lb-score { flex-shrink:0; }
+
+#instructions {
+  font-size:clamp(5px,1.8vw,6px); color:#555; text-align:center; line-height:2.4;
+}
+
+/* new record flash */
+#newrecord {
+  display:none; position:absolute; top:20%; left:50%; transform:translateX(-50%);
+  font-size:clamp(8px,3vw,12px); color:#ffee00; background:rgba(0,0,0,0.8);
+  padding:8px 16px; border:2px solid #ffee00; z-index:20; white-space:nowrap;
+  animation:recordAnim 0.4s ease-out;
+  pointer-events:none;
+}
+@keyframes recordAnim { 0%{transform:translateX(-50%) scale(1.4)} 100%{transform:translateX(-50%) scale(1)} }
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+  <div id="title">★ 小朋友下樓梯 ★</div>
+
+  <div id="hud">
+    <div class="hud-block">
+      <span class="hud-label">SCORE</span>
+      <span class="hud-value" id="score-display">0</span>
+    </div>
+    <div class="hud-block" style="align-items:center">
+      <span class="hud-label">HP</span>
+      <div id="hearts">
+        <span class="heart" id="h1">❤️</span>
+        <span class="heart" id="h2">❤️</span>
+        <span class="heart" id="h3">❤️</span>
+      </div>
+    </div>
+    <div class="hud-block" style="align-items:flex-end">
+      <span class="hud-label">BEST</span>
+      <span class="hud-value red" id="best-display">0</span>
+    </div>
+  </div>
+
+  <div id="canvas-area">
+    <div id="canvas-container">
+      <canvas id="gameCanvas"></canvas>
+      <div id="scanlines"></div>
+      <div id="newrecord">★ NEW RECORD! ★</div>
+
+      <div id="overlay">
+        <!-- will be populated by JS -->
+      </div>
+    </div>
+
+    <div id="touch-controls">
+      <button class="touch-btn" id="btn-left" ontouchstart="touchDir(-1)" ontouchend="touchDir(0)" onmousedown="touchDir(-1)" onmouseup="touchDir(0)">◀</button>
+      <div id="touch-info">觸控操控<br>角色自動下落</div>
+      <button class="touch-btn" id="btn-right" ontouchstart="touchDir(1)" ontouchend="touchDir(0)" onmousedown="touchDir(1)" onmouseup="touchDir(0)">▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+//  CANVAS SETUP — responsive
+// ════════════════════════════════════════
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const DESIGN_W = 320, DESIGN_H = 480;
+canvas.width = DESIGN_W; canvas.height = DESIGN_H;
+const W = DESIGN_W, H = DESIGN_H;
+
+// ════════════════════════════════════════
+//  MOBILE DETECTION
+// ════════════════════════════════════════
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                 ('ontouchstart' in window);
+if (isMobile) {
+  document.getElementById('touch-controls').style.display = 'flex';
+}
+
+// touch direction state
+let touchDirVal = 0;
+function touchDir(d) {
+  touchDirVal = d;
+  const lb = document.getElementById('btn-left');
+  const rb = document.getElementById('btn-right');
+  lb.classList.toggle('pressed', d < 0);
+  rb.classList.toggle('pressed', d > 0);
+}
+// prevent page scroll on touch
+document.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+
+// ════════════════════════════════════════
+//  LEADERBOARD (localStorage)
+// ════════════════════════════════════════
+const LB_KEY = 'stairKids_lb_v1';
+function loadLB() {
+  try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveLB(lb) {
+  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+}
+function addToLB(name, sc) {
+  const lb = loadLB();
+  lb.push({ name: name.substring(0,8), score: sc, date: new Date().toLocaleDateString('zh-TW') });
+  lb.sort((a,b) => b.score - a.score);
+  const trimmed = lb.slice(0, 20);
+  saveLB(trimmed);
+  return trimmed;
+}
+
+// player name persisted
+let playerName = localStorage.getItem('stairKids_name') || '';
+
+// ════════════════════════════════════════
+//  GAME STATE
+// ════════════════════════════════════════
+let state = 'idle';
+let score = 0;
+let bestScore = loadLB()[0]?.score || 0;
+let scrollSpeed = 0.8, scrollY = 0, frameCount = 0;
+let invTimer = 0, shakeTimer = 0, shakeAmt = 0;
+let newRecordShown = false;
+
+// ── keyboard ──
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+// ════════════════════════════════════════
+//  PLAYER
+// ════════════════════════════════════════
+const PW = 16, PH = 20;
+let player = {};
+
+function resetPlayer() {
+  player = { x:W/2-PW/2, y:80, vx:0, vy:0, hp:3,
+             onGround:false, facing:1, wf:0, wt:0, dead:false };
+}
+
+// ════════════════════════════════════════
+//  PLATFORMS
+// ════════════════════════════════════════
+let platforms = [];
+const PLAT_H = 8;
+
+function makePlat(x, y, w, type) {
+  return { x, y, w, type,
+    moveDir: Math.random()<.5?1:-1,
+    moveRange: 40+Math.random()*30, moveOrigin:x,
+    moveSpeed: 0.4+Math.random()*0.4,
+    crumbleTimer:0, crumbling:false, crumbled:false,
+    springAnim:0, hitFlash:0 };
+}
+
+function spawnRow(y) {
+  const prog = Math.min(score/400, 1);
+  const count = Math.floor(Math.random()*2)+1;
+  const spacing = W/count;
+  for (let i=0;i<count;i++) {
+    const pw = 38+Math.random()*44;
+    const px = Math.max(0, Math.min(W-pw, i*spacing + Math.random()*(spacing-pw)));
+    const r = Math.random();
+    const sp=Math.min(0.18,0.03+prog*0.15), sg=Math.min(0.2,0.05+prog*0.13),
+          sc=Math.min(0.2,0.03+prog*0.15), sm=Math.min(0.25,0.04+prog*0.18);
+    let type='normal';
+    if (r<sp) type='spike';
+    else if (r<sp+sg) type='spring';
+    else if (r<sp+sg+sc) type='crumble';
+    else if (r<sp+sg+sc+sm) type='moving';
+    platforms.push(makePlat(px,y,pw,type));
+  }
+}
+
+function initPlatforms() {
+  platforms = [];
+  platforms.push(makePlat(W/2-40, 140, 80, 'normal'));
+  for (let y=180; y<H+60; y+=55) spawnRow(y);
+}
+
+// ════════════════════════════════════════
+//  DRAW HELPERS
+// ════════════════════════════════════════
+function drawBG() {
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#090418'); g.addColorStop(1,'#160d36');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // stars
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  const ss=[7,31,53,97,137,173,211,251,293,337,379];
+  for(let i=0;i<ss.length;i++){
+    const sx=(ss[i]*31+frameCount*.02)%W, sy=(ss[i]*17+scrollY*.1)%H;
+    ctx.fillRect(Math.floor(sx),Math.floor(sy),i%3?1:2,i%3?1:2);
+  }
+  // grid
+  ctx.strokeStyle='rgba(70,30,140,0.1)'; ctx.lineWidth=1;
+  const go=scrollY%40;
+  for(let y=-go;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+}
+
+function drawSpikeCeil() {
+  const sw=10,sh=14,n=Math.ceil(W/sw);
+  ctx.fillStyle='#bb1111';
+  for(let i=0;i<n;i++){
+    ctx.beginPath();ctx.moveTo(i*sw,0);ctx.lineTo(i*sw+sw/2,sh);ctx.lineTo((i+1)*sw,0);ctx.fill();
+  }
+  ctx.fillStyle='#660000'; ctx.fillRect(0,0,W,3);
+}
+
+const C={
+  normal:{body:'#4a9e4a',top:'#6eca6e',shadow:'#2d6e2d'},
+  spike: {body:'#8b2222',top:'#aa3333',shadow:'#550000'},
+  spring:{body:'#cc8800',top:'#ffbb00',shadow:'#885500'},
+  crumble:{body:'#8b6914',top:'#c49a1e',shadow:'#5a3f00'},
+  moving:{body:'#225599',top:'#3377cc',shadow:'#112244'},
+};
+
+function drawPlat(p) {
+  if (p.crumbled) return;
+  const alpha = p.crumbling ? Math.max(0,1-p.crumbleTimer/40) : 1;
+  ctx.globalAlpha = alpha;
+  const c=C[p.type];
+  const sh = p.hitFlash>0 ? Math.sin(p.hitFlash*1.5)*2 : 0;
+  const px=Math.round(p.x+sh), py=Math.round(p.y);
+  ctx.fillStyle=c.shadow; ctx.fillRect(px+2,py+2,p.w,PLAT_H);
+  ctx.fillStyle=c.body;   ctx.fillRect(px,py,p.w,PLAT_H);
+  ctx.fillStyle=c.top;    ctx.fillRect(px,py,p.w,3);
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  for(let i=4;i<p.w-4;i+=8) ctx.fillRect(px+i,py+1,2,1);
+
+  if (p.type==='spike'){
+    const sw2=7, sc=Math.floor(p.w/sw2);
+    ctx.fillStyle='#cc2222';
+    for(let i=0;i<sc;i++){
+      ctx.beginPath();ctx.moveTo(px+i*sw2+1,py);ctx.lineTo(px+i*sw2+sw2/2,py-8);ctx.lineTo(px+i*sw2+sw2-1,py);ctx.fill();
+    }
+    ctx.fillStyle='#ff7777';
+    for(let i=0;i<sc;i++) ctx.fillRect(px+i*sw2+sw2/2-0.5,py-8,1,2);
+  }
+  if (p.type==='spring'){
+    const sa=p.springAnim, sh2=Math.max(3,8-Math.floor(sa*5));
+    ctx.fillStyle='#cc8800'; ctx.fillRect(px+p.w/2-5,py-sh2,10,sh2);
+    ctx.fillStyle='#ffee00'; ctx.fillRect(px+p.w/2-7,py-sh2-3,14,3);
+    ctx.fillStyle='#885500';
+    for(let i=0;i<3;i++) ctx.fillRect(px+p.w/2-5,py-sh2+i*Math.max(2,sh2/3),10,1);
+  }
+  if (p.type==='crumble'){
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fillRect(px+p.w/3,py+1,1,PLAT_H-2);
+    ctx.fillRect(px+2*p.w/3,py+1,1,PLAT_H-2);
+    if(p.crumbling){
+      const cr=Math.floor(p.crumbleTimer/5)%2;
+      ctx.fillStyle='rgba(180,120,0,0.5)';
+      ctx.fillRect(px+cr,py,p.w,PLAT_H);
+    }
+  }
+  if (p.type==='moving'){
+    ctx.fillStyle='rgba(255,255,255,0.45)';
+    ctx.fillRect(px+4,py+2,3,3); ctx.fillRect(px+p.w-7,py+2,3,3);
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPlayer() {
+  if (player.dead) return;
+  if (invTimer>0 && Math.floor(invTimer/4)%2===0) return;
+  const px=Math.round(player.x), py=Math.round(player.y);
+  ctx.save();
+  if (player.facing<0){ ctx.translate(px+PW,py); ctx.scale(-1,1); }
+  else ctx.translate(px,py);
+  const wf=player.onGround?Math.floor(player.wf)%2:0;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(PW/2,PH+1,PW/2,3,0,0,Math.PI*2); ctx.fill();
+  // legs
+  ctx.fillStyle='#3355cc';
+  if(!wf){ ctx.fillRect(3,13,4,7); ctx.fillRect(9,13,4,7); }
+  else { ctx.fillRect(2,13,4,7); ctx.fillRect(10,12,4,8); }
+  ctx.fillStyle='#111';
+  if(!wf){ ctx.fillRect(2,18,5,3); ctx.fillRect(9,18,5,3); }
+  else { ctx.fillRect(1,18,5,3); ctx.fillRect(10,17,5,3); }
+  // body
+  ctx.fillStyle='#ee4444'; ctx.fillRect(2,8,12,7);
+  ctx.fillStyle='#fff';    ctx.fillRect(5,8,6,2);
+  // arms
+  ctx.fillStyle='#f5c5a0';
+  if(!wf){ ctx.fillRect(0,9,3,5); ctx.fillRect(13,9,3,5); }
+  else { ctx.fillRect(0,8,3,5); ctx.fillRect(13,10,3,5); }
+  // head
+  ctx.fillStyle='#f5c5a0'; ctx.fillRect(3,0,10,9);
+  ctx.fillStyle='#222';    ctx.fillRect(3,0,10,3); ctx.fillRect(3,0,2,5);
+  ctx.fillStyle='#111';    ctx.fillRect(6,4,2,2); ctx.fillRect(10,4,2,2);
+  ctx.fillStyle='#c06050'; ctx.fillRect(7,7,4,1);
+  ctx.restore();
+}
+
+// ════════════════════════════════════════
+//  HUD
+// ════════════════════════════════════════
+function updateHUD() {
+  document.getElementById('score-display').textContent = score;
+  document.getElementById('best-display').textContent = bestScore;
+  ['h1','h2','h3'].forEach((id,i)=>{
+    document.getElementById(id).classList.toggle('empty', i>=player.hp);
+  });
+}
+
+function triggerShake(n){ shakeTimer=12; shakeAmt=n; }
+
+// ════════════════════════════════════════
+//  OVERLAY SCREENS
+// ════════════════════════════════════════
+const overlay = document.getElementById('overlay');
+
+function renderLBHtml(lb, highlightScore) {
+  if (!lb.length) return '<div style="font-size:6px;color:#555;text-align:center">尚無紀錄</div>';
+  const medals = ['🥇','🥈','🥉'];
+  const cls = ['gold','silver','bronze'];
+  return lb.slice(0,10).map((e,i)=>{
+    const isMe = e.score===highlightScore && highlightScore>0;
+    const rowCls = isMe ? 'lb-row me' : (cls[i] ? `lb-row ${cls[i]}` : 'lb-row');
+    const rank = medals[i] || `${i+1}.`;
+    return `<div class="${rowCls}"><span class="lb-rank">${rank}</span><span class="lb-name">${e.name||'???'}</span><span class="lb-score">${e.score}</span></div>`;
+  }).join('');
+}
+
+function showStartScreen() {
+  const lb = loadLB();
+  overlay.style.display='flex';
+  overlay.innerHTML=`
+    <div class="overlay-title blink">▼ 小朋友下樓梯 ▼</div>
+    <div id="name-section">
+      <div class="name-label" style="font-size:6px;color:#888;margin-bottom:2px">輸入你的名字</div>
+      <input id="name-input" type="text" maxlength="8" placeholder="玩家名稱"
+        value="${playerName}" autocomplete="off" spellcheck="false"/>
+    </div>
+    <div id="leaderboard-section">
+      <div id="lb-title">🏆 排行榜</div>
+      <div id="lb-list">${renderLBHtml(lb,0)}</div>
+    </div>
+    <button class="pixel-btn" onclick="handleStart()">▶ 開始遊戲</button>
+    <div id="instructions">← → 移動 ｜ 自動落下<br>⚠️ 針山 = 即死 ｜ 🩸 尖刺 = 扣血<br>🌀 彈簧 = 向上彈 ｜ 💀 掉出 = 結束</div>
+  `;
+  document.getElementById('name-input').addEventListener('input', e=>{
+    playerName = e.target.value.trim();
+    localStorage.setItem('stairKids_name', playerName);
+  });
+  // enter key
+  document.getElementById('name-input').addEventListener('keydown', e=>{
+    if (e.key==='Enter') handleStart();
+  });
+}
+
+function showGameOverScreen() {
+  const lb = addToLB(playerName||'匿名', score);
+  bestScore = lb[0]?.score || score;
+  updateHUD();
+
+  const isNewRecord = lb.length>0 && lb[0].score===score && lb[0].name===(playerName||'匿名');
+  const myRank = lb.findIndex(e=>e.score===score)+1;
+
+  overlay.style.display='flex';
+  overlay.innerHTML=`
+    <div class="overlay-title blink">💀 GAME OVER</div>
+    <div class="score-line">
+      你的分數：<span style="color:#ffee00">${score}</span><br>
+      ${isNewRecord ? '<span style="color:#ff4">★ 新紀錄！★</span>' : `排名第 ${myRank} 名`}
+    </div>
+    <div id="leaderboard-section">
+      <div id="lb-title">🏆 排行榜 TOP 10</div>
+      <div id="lb-list">${renderLBHtml(lb, score)}</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button class="pixel-btn" onclick="handleStart()">▶ 再玩一次</button>
+      <button class="pixel-btn secondary" onclick="handleChangeName()">✎ 改名字</button>
+    </div>
+  `;
+}
+
+function handleStart() {
+  const ni = document.getElementById('name-input');
+  if (ni) { playerName = ni.value.trim() || playerName; localStorage.setItem('stairKids_name',playerName); }
+  if (!playerName) {
+    // prompt name if empty
+    showNamePrompt();
+    return;
+  }
+  startGame();
+}
+
+function handleChangeName() {
+  showStartScreen();
+}
+
+function showNamePrompt() {
+  const ni = document.getElementById('name-input');
+  if (ni) {
+    ni.style.border='2px solid #ff4444';
+    ni.placeholder='請輸入名字！';
+    ni.focus();
+    setTimeout(()=>{ ni.style.border='2px solid #ffee00'; },800);
+  }
+}
+
+// ════════════════════════════════════════
+//  GAME LIFECYCLE
+// ════════════════════════════════════════
+function startGame() {
+  overlay.style.display='none';
+  state='playing';
+  score=0; scrollY=0; scrollSpeed=0.8;
+  frameCount=0; invTimer=0; shakeTimer=0;
+  newRecordShown=false;
+  resetPlayer(); initPlatforms(); updateHUD();
+}
+
+function gameOver() {
+  if (state!=='playing') return;
+  state='dead'; player.dead=true;
+  triggerShake(5);
+  setTimeout(showGameOverScreen, 600);
+}
+
+// ════════════════════════════════════════
+//  UPDATE
+// ════════════════════════════════════════
+const GRAVITY=0.35, MOVE_SPEED=2.6;
+
+function update() {
+  if (state!=='playing') return;
+  frameCount++;
+  if(invTimer>0) invTimer--;
+  if(shakeTimer>0) shakeTimer--;
+
+  scrollSpeed = Math.min(3.2, 0.8+score*0.0022);
+  scrollY += scrollSpeed;
+
+  if (frameCount%28===0) {
+    score += Math.ceil(scrollSpeed);
+    updateHUD();
+    // new record flash
+    if (score>bestScore && !newRecordShown) {
+      newRecordShown=true;
+      const nr=document.getElementById('newrecord');
+      nr.style.display='block';
+      setTimeout(()=>{ nr.style.display='none'; },1800);
+    }
+  }
+
+  // input: keyboard or touch
+  player.vx=0;
+  const goLeft  = keys['ArrowLeft']  || keys['KeyA'] || touchDirVal<0;
+  const goRight = keys['ArrowRight'] || keys['KeyD'] || touchDirVal>0;
+  if(goLeft)  { player.vx=-MOVE_SPEED; player.facing=-1; }
+  if(goRight) { player.vx= MOVE_SPEED; player.facing= 1; }
+
+  player.vy = Math.min(player.vy+GRAVITY, 9);
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // wrap X
+  if(player.x+PW<0) player.x=W;
+  if(player.x>W)    player.x=-PW;
+
+  // walk anim
+  if(player.onGround&&Math.abs(player.vx)>0){
+    player.wt++;
+    if(player.wt>=7){player.wf++;player.wt=0;}
+  } else player.wf=0;
+
+  player.onGround=false;
+
+  // platform logic
+  for(const p of platforms){
+    if(p.crumbled) continue;
+    if(p.type==='moving'){
+      p.x+=p.moveDir*p.moveSpeed;
+      if(Math.abs(p.x-p.moveOrigin)>p.moveRange) p.moveDir*=-1;
+      p.x=Math.max(0,Math.min(W-p.w,p.x));
+    }
+    if(p.crumbling){ p.crumbleTimer++; if(p.crumbleTimer>=48) p.crumbled=true; }
+    if(p.springAnim>0) p.springAnim=Math.max(0,p.springAnim-0.05);
+    if(p.hitFlash>0) p.hitFlash--;
+
+    if(player.vy>=0){
+      const feet=player.y+PH, prevFeet=feet-player.vy;
+      if(player.x+PW>p.x+2 && player.x<p.x+p.w-2 && prevFeet<=p.y && feet>=p.y && feet<=p.y+PLAT_H+2){
+        if(p.type==='spike'){
+          if(invTimer<=0){
+            player.hp--; invTimer=90; triggerShake(4); p.hitFlash=14; updateHUD();
+            if(player.hp<=0){gameOver();return;}
+          }
+          player.y=p.y-PH; player.vy=-4;
+        } else if(p.type==='spring'){
+          player.y=p.y-PH; player.vy=-8; p.springAnim=1;
+        } else {
+          player.y=p.y-PH; player.vy=0; player.onGround=true;
+          if(p.type==='crumble'&&!p.crumbling) p.crumbling=true;
+        }
+      }
+    }
+  }
+
+  // scroll world
+  for(const p of platforms) p.y-=scrollSpeed;
+  player.y-=scrollSpeed;
+
+  // death
+  if(player.y>H+40){ gameOver(); return; }
+  if(player.y<14)  { gameOver(); return; }
+
+  // spawn
+  const lowestY=Math.max(...platforms.map(p=>p.y));
+  const gap=44+Math.max(0,score/180)*7;
+  if(lowestY<H+20) spawnRow(lowestY+gap+Math.random()*18);
+  platforms=platforms.filter(p=>p.y>-20);
+}
+
+// ════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════
+function render(){
+  ctx.save();
+  if(shakeTimer>0){
+    ctx.translate((Math.random()-.5)*shakeAmt,(Math.random()-.5)*shakeAmt);
+  }
+  drawBG();
+  for(const p of platforms) drawPlat(p);
+  drawPlayer();
+  drawSpikeCeil();
+  if(state==='playing'&&player.y<65){
+    ctx.fillStyle=`rgba(200,0,0,${Math.max(0,0.35*(1-player.y/65))})`;
+    ctx.fillRect(0,0,W,H);
+  }
+  ctx.restore();
+}
+
+// ════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+
+// ── init ──
+(function(){
+  // draw idle bg once
+  drawBG();
+  const demo=[
+    makePlat(20,200,70,'normal'), makePlat(130,260,60,'spring'),
+    makePlat(210,310,55,'crumble'), makePlat(50,370,65,'moving'),
+    makePlat(185,430,50,'spike'),
+  ];
+  demo.forEach(drawPlat);
+  drawSpikeCeil();
+  showStartScreen();
+  loop();
+})();
+</script>
+</body>
+</html>
